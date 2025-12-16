@@ -15,9 +15,10 @@ presupuesto total y emite el mismo esquema de salida (hasta 6 capítulos,
 4 partidas y los totales por recurso) sin fijar la profundidad del
 archivo de entrada.
 """
-from __future__ import annotations
+#from __future__ import annotations
 
 import re
+import os  # 👈 para manejar rutas
 from dataclasses import dataclass
 from functools import reduce
 from operator import mul
@@ -311,17 +312,22 @@ def generate_resource_map(workbook_path: str, sheet_name: Optional[str] = None) 
     return rows
 
 
-def export_to_csv(workbook_path: str, output_csv: str, sheet_name: Optional[str] = None) -> None:
+def export_to_excel(workbook_path: str, output_xlsx: str, sheet_name: Optional[str] = None) -> None:
     rows = generate_resource_map(workbook_path, sheet_name=sheet_name)
     export_df = pd.DataFrame(rows)
-    export_df.to_csv(output_csv, index=False, header=False)
+    export_df.to_excel(
+        output_xlsx,
+        index=False,
+        header=False,
+        engine='openpyxl'
+    )
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Reconstruye totales por recurso desde un Excel de Presto.")
-    parser.add_argument("excel_path", help="Ruta al archivo Excel exportado desde Presto")
+    parser.add_argument("excel_path", nargs="?", help="Ruta al archivo Excel exportado desde Presto")
     parser.add_argument(
         "--sheet",
         dest="sheet_name",
@@ -330,10 +336,39 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--output",
-        dest="output_csv",
-        default="resource_totals.csv",
-        help="Ruta del CSV de salida con el mismo formato que el script original",
+        dest="output_path",
+        default="resource_totals.xlsx",  # 👈 ahora por defecto Excel
+        help="Ruta del archivo de salida (XLSX por defecto)",
     )
 
     args = parser.parse_args()
-    export_to_csv(args.excel_path, args.output_csv, sheet_name=args.sheet_name)
+    excel_path = args.excel_path
+    if excel_path is None:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+
+        temp_window = tk.Toplevel()
+        temp_window.withdraw()
+        temp_window.focus_force()
+
+        excel_path = filedialog.askopenfilename()
+        root.destroy()
+
+        if not excel_path:
+            parser.error("Debe seleccionar un archivo Excel.")
+
+    # 👇 Resolver ruta de salida: si el usuario solo pone nombre, se guarda junto al Excel origen
+    output_path = args.output_path
+    if not os.path.isabs(output_path) and os.path.dirname(output_path) == "":
+        excel_dir = os.path.dirname(excel_path) or "."
+        output_path = os.path.join(excel_dir, output_path)
+
+    # Por si el usuario escribió sin extensión o con .csv, lo pasamos a .xlsx
+    base, ext = os.path.splitext(output_path)
+    if ext.lower() not in {".xlsx", ".xlsm", ".xls"}:
+        output_path = base + ".xlsx"
+
+    export_to_excel(excel_path, output_path, sheet_name=args.sheet_name)
