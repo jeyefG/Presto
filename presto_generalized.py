@@ -250,6 +250,7 @@ def traverse_resources(
     editor_tag: str = "auto",
 ) -> List[List[object]]:
     visited: Set[str] = set()
+    emitted_rows: Set[int] = set()
     output: List[List[object]] = []
 
     def _walk(cell_ref: str, context: TraversalContext) -> None:
@@ -268,7 +269,8 @@ def traverse_resources(
                 _walk(child, next_context)
             return
 
-        if meta and meta.nature in RESOURCE_TYPES:
+        if meta and meta.nature in RESOURCE_TYPES and meta.row_index not in emitted_rows:
+            emitted_rows.add(meta.row_index)
             output.append(emit_row(next_context, meta, evaluator, editor_tag))
 
     _walk(start_cell, TraversalContext([], []))
