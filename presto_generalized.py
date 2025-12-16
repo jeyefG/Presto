@@ -57,7 +57,10 @@ class DependencyGraph:
 
     def __init__(self, df: pd.DataFrame):
         self.df = df
-        self.graph: Dict[str, Set[str]] = {}
+        # Use ``List[str]`` instead of ``Set[str]`` to preserve the order
+        # of references as they appear in the formulas. The legacy script
+        # relies on this deterministic order for its output ordering.
+        self.graph: Dict[str, List[str]] = {}
         self._build_graph()
 
     def _coord(self, row_idx: int, col_idx: int) -> str:
@@ -84,11 +87,17 @@ class DependencyGraph:
             for col_idx, value in row.items():
                 if isinstance(value, str) and (value.startswith("=") or "SUM" in value or "ROUND" in value):
                     coord = self._coord(row_idx, col_idx)
-                    refs = set(self._extract_references(value))
+                    refs = []
+                    seen: Set[str] = set()
+                    for ref in self._extract_references(value):
+                        if ref in seen:
+                            continue
+                        seen.add(ref)
+                        refs.append(ref)
                     self.graph[coord] = refs
 
-    def children(self, coord: str) -> Set[str]:
-        return self.graph.get(coord, set())
+    def children(self, coord: str) -> List[str]:
+        return self.graph.get(coord, [])
 
 
 class FormulaEvaluator:
@@ -372,3 +381,5 @@ if __name__ == "__main__":
         output_path = base + ".xlsx"
 
     export_to_excel(excel_path, output_path, sheet_name=args.sheet_name)
+
+
