@@ -157,10 +157,15 @@ class TraversalContext:
         self.partidas = partidas
 
     def add(self, meta: RowMetadata) -> "TraversalContext":
+        def _append_unique(items: List[RowMetadata], candidate: RowMetadata) -> List[RowMetadata]:
+            if any(item.row_index == candidate.row_index for item in items):
+                return items
+            return items + [candidate]
+
         if meta.nature == "Capítulo":
-            return TraversalContext(self.chapters + [meta], self.partidas)
+            return TraversalContext(_append_unique(self.chapters, meta), self.partidas)
         if meta.nature == "Partida":
-            return TraversalContext(self.chapters, self.partidas + [meta])
+            return TraversalContext(self.chapters, _append_unique(self.partidas, meta))
         return self
 
 
@@ -426,7 +431,3 @@ if __name__ == "__main__":
         output_path = base + ".xlsx"
 
     export_to_excel(excel_path, output_path, sheet_name=args.sheet_name)
-
-
-
-
