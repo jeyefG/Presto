@@ -240,6 +240,37 @@ def emit_row(
     row.append(editor_tag)
     return row
 
+def emit_non_resource_leaf(
+    context: TraversalContext,
+    amount_meta: RowMetadata,
+    evaluator: FormulaEvaluator,
+    editor_tag: str,
+) -> List[object]:
+    chapter_names = [meta.name for meta in context.chapters]
+    partida_names = [meta.name for meta in context.partidas]
+    chapter_qty = [evaluator.evaluate(meta.quantity_cell) for meta in context.chapters]
+    partida_qty = [evaluator.evaluate(meta.quantity_cell) for meta in context.partidas]
+
+    resource_qty = 1.0
+    resource_price = evaluator.evaluate(amount_meta.price_cell)
+
+    total_quantity = _product(chapter_qty + partida_qty + [resource_qty])
+    total_cost = total_quantity * resource_price
+
+    row = []
+    row.extend(_pad(chapter_names, 6))
+    row.extend(_pad(partida_names, 4))
+    row.append("")
+    row.append("")
+    row.append("")
+    row.extend(_pad([str(q) for q in chapter_qty], 6))
+    row.extend(_pad([str(q) for q in partida_qty], 4))
+    row.append(resource_qty)
+    row.append(resource_price)
+    row.append(total_quantity)
+    row.append(total_cost)
+    row.append(editor_tag)
+    return row
 
 def traverse_resources(
     df: pd.DataFrame,
@@ -269,9 +300,21 @@ def traverse_resources(
                 _walk(child, next_context)
             return
 
-        if meta and meta.nature in RESOURCE_TYPES and meta.row_index not in emitted_rows:
+        if meta and meta.row_index not in emitted_rows:
+            # Solo emitimos partidas/capítulos sin recursos cuando su valor
+            # de monto es primario (no proviene de fórmulas ni subtotales).
+            is_formula_price = False
+            if isinstance(df.loc[meta.row_index][PRICE_COL], str):
+                raw = df.loc[meta.row_index][PRICE_COL]
+                is_formula_price = raw.startswith("=") or "SUM" in raw or "ROUND" in raw
+
+            has_formula_dependencies = bool(graph.children(meta.price_cell))
+
             emitted_rows.add(meta.row_index)
-            output.append(emit_row(next_context, meta, evaluator, editor_tag))
+            if meta.nature in RESOURCE_TYPES:
+                output.append(emit_row(next_context, meta, evaluator, editor_tag))
+            elif meta.nature in {"Partida", "Capítulo"} and not (is_formula_price or has_formula_dependencies):
+                output.append(emit_non_resource_leaf(next_context, meta, evaluator, editor_tag))
 
     _walk(start_cell, TraversalContext([], []))
     return output
@@ -383,5 +426,7 @@ if __name__ == "__main__":
         output_path = base + ".xlsx"
 
     export_to_excel(excel_path, output_path, sheet_name=args.sheet_name)
+
+
 
 
