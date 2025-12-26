@@ -218,6 +218,7 @@ def emit_row(
     resource_meta: RowMetadata,
     evaluator: FormulaEvaluator,
     editor_tag: str,
+    unit_price_id: int,
 ) -> List[object]:
     chapter_names = [meta.name for meta in context.chapters]
     partida_names = [meta.name for meta in context.partidas]
@@ -243,6 +244,7 @@ def emit_row(
     row.append(total_quantity)
     row.append(total_cost)
     row.append(editor_tag)
+    row.append(unit_price_id)
     return row
 
 def emit_non_resource_leaf(
@@ -250,6 +252,7 @@ def emit_non_resource_leaf(
     amount_meta: RowMetadata,
     evaluator: FormulaEvaluator,
     editor_tag: str,
+    unit_price_id: int,
 ) -> List[object]:
     chapter_names = [meta.name for meta in context.chapters]
     partida_names = [meta.name for meta in context.partidas]
@@ -275,6 +278,7 @@ def emit_non_resource_leaf(
     row.append(total_quantity)
     row.append(total_cost)
     row.append(editor_tag)
+    row.append(unit_price_id)
     return row
 
 def traverse_resources(
@@ -287,7 +291,23 @@ def traverse_resources(
 ) -> List[List[object]]:
     visited: Set[str] = set()
     emitted_rows: Set[int] = set()
+    unit_price_ids: Dict[tuple, int] = {}
     output: List[List[object]] = []
+
+    def _unit_price_key(meta: Optional[RowMetadata], context: TraversalContext) -> tuple:
+        if context.partidas:
+            return ("Partida", context.partidas[-1].row_index)
+        if context.chapters:
+            return ("Capítulo", context.chapters[-1].row_index)
+        if meta:
+            return (meta.nature, meta.row_index)
+        return ("", -1)
+
+    def _unit_price_id(meta: Optional[RowMetadata], context: TraversalContext) -> int:
+        key = _unit_price_key(meta, context)
+        if key not in unit_price_ids:
+            unit_price_ids[key] = len(unit_price_ids) + 1
+        return unit_price_ids[key]
 
     def _walk(cell_ref: str, context: TraversalContext) -> None:
         if cell_ref in visited:
@@ -316,10 +336,11 @@ def traverse_resources(
             has_formula_dependencies = bool(graph.children(meta.price_cell))
 
             emitted_rows.add(meta.row_index)
+            unit_price_id = _unit_price_id(meta, next_context)
             if meta.nature in RESOURCE_TYPES:
-                output.append(emit_row(next_context, meta, evaluator, editor_tag))
+                output.append(emit_row(next_context, meta, evaluator, editor_tag, unit_price_id))
             elif meta.nature in {"Partida", "Capítulo"} and not (is_formula_price or has_formula_dependencies):
-                output.append(emit_non_resource_leaf(next_context, meta, evaluator, editor_tag))
+                output.append(emit_non_resource_leaf(next_context, meta, evaluator, editor_tag, unit_price_id))
 
     _walk(start_cell, TraversalContext([], []))
     return output
@@ -365,6 +386,7 @@ def generate_resource_map(workbook_path: str, sheet_name: Optional[str] = None) 
         "Total Cant",
         "Presupuesto Total",
         "Editor",
+        "ID Precio Unitario",
     )
 
     rows = [list(header)]
