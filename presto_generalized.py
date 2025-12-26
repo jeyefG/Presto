@@ -326,6 +326,7 @@ def traverse_resources(
 
 
 def generate_resource_map(workbook_path: str, sheet_name: Optional[str] = None) -> List[List[object]]:
+    #data_only = False genera un df con las fórmulas del excel y no los valores
     wb = load_workbook(workbook_path, data_only=False)
     sheet = wb[sheet_name] if sheet_name else wb[wb.sheetnames[0]]
     df = pd.DataFrame(sheet.values)
@@ -431,3 +432,4 @@ if __name__ == "__main__":
         output_path = base + ".xlsx"
 
     export_to_excel(excel_path, output_path, sheet_name=args.sheet_name)
+
