@@ -383,7 +383,7 @@ def export_to_excel(workbook_path: str, output_xlsx: str, sheet_name: Optional[s
     )
 
 
-if __name__ == "__main__":
+def run_cli(argv: Optional[Sequence[str]] = None) -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Reconstruye totales por recurso desde un Excel de Presto.")
@@ -401,7 +401,7 @@ if __name__ == "__main__":
         help="Ruta del archivo de salida (XLSX por defecto)",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     excel_path = args.excel_path
     if excel_path is None:
         import tkinter as tk
@@ -420,15 +420,16 @@ if __name__ == "__main__":
         if not excel_path:
             parser.error("Debe seleccionar un archivo Excel.")
 
-    # 👇 Resolver ruta de salida: si el usuario solo pone nombre, se guarda junto al Excel origen
     output_path = args.output_path
     if not os.path.isabs(output_path) and os.path.dirname(output_path) == "":
         excel_dir = os.path.dirname(excel_path) or "."
         output_path = os.path.join(excel_dir, output_path)
 
-    # Por si el usuario escribió sin extensión o con .csv, lo pasamos a .xlsx
     base, ext = os.path.splitext(output_path)
     if ext.lower() not in {".xlsx", ".xlsm", ".xls"}:
         output_path = base + ".xlsx"
 
     export_to_excel(excel_path, output_path, sheet_name=args.sheet_name)
+
+if __name__ == "__main__":
+    run_cli()
